@@ -212,7 +212,8 @@ OPENAI_API_KEY=sk-... python3 -m agent_otel.run     # 真实 OpenAI
 ## 5. 做了哪些测试（实验全表）
 
 > 全部实跑于 **MatrixOne v3.0.11**，每个脚本**自建库 → 跑 → 清理**，可独立重复运行。
-> 每个实验的**设计理由 / 测试点 / MatrixOne 能力价值**逐条说明见 **[EXPERIMENTS.md](EXPERIMENTS.md)**。
+> 每个实验的**设计理由 / 测试点 / MatrixOne 能力价值**逐条说明见 **[EXPERIMENTS.md](EXPERIMENTS.md)**；
+> 实测到的 **MatrixOne 缺陷/限制汇总**见 **[LIMITATIONS.md](LIMITATIONS.md)**（诚实清单）。
 
 | 脚本 | 验证的能力 | 关键实测结果 | 依赖 |
 |---|---|---|---|
@@ -298,6 +299,7 @@ matrixone/       git4data 实现：mo_client / git4data(原语封装) / repo / r
 lakefs_demo/     lakeFS 实现：lk_config / start_lakefs.sh / run_demo
 agent_otel/      真实 agent 接入：tools / llm(可插拔) / agent(OTel 埋点) / exporter(→MatrixOne) / run
 experiments/     18 个可独立重跑、自清理的实验脚本（见第 5 节）
+LIMITATIONS.md   MatrixOne 实测缺陷/限制汇总（诚实清单）
 COMPARISON.md    深度报告（§1-12：能力对比/ML场景/性能基准/集成/平台架构/Agent进化）
 README.md        本教程
 ```
