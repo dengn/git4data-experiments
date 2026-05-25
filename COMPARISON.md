@@ -878,3 +878,42 @@ Restate 是自带存储的单体引擎。**MatrixOne 的位置不变：它是这
 
 **一句话**：**MatrixOne ≈ "Neon 级的可分支数据库内核（且分支更细、自带 git4data），但不是 Supabase 级的 BaaS"**——
 作 BaaS 的**数据库底座**绰绰有余且有版本化亮点；要补齐 BaaS，缺的是 API/Auth/Realtime/Storage/Functions/RLS/SDK 这层。
+
+---
+
+## 19. 具身智能：机器人 3D 空间记忆（IoT 体素地图）+ git4data（`exp_robot_memory_3d.py`，实测）
+
+**场景**：机器人/具身智能的「记忆」来自 IoT 传感器（LiDAR/深度相机/声呐）的连续 **3D 点流**，落成的
+标准结构是**体素地图 / 占据栅格**（每个空间立方体累加被观测为占据的次数 + 语义标签 + 置信度，即 OctoMap /
+TSDF 那一类）。关键在于：机器人记忆**不是静态的**——世界会**漂移**、多机要**合并**地图、传感器抖动注入
+**幽灵障碍**要**回滚**、还常要**时间旅行**（「上周二这里有什么」）。这些恰好是空间数据上的 **git 操作**。
+
+**实测 5 幕**（一个 MatrixOne 库内同时完成「3D 记忆」与「记忆的版本控制」）：
+
+| 幕 | 做什么 | git4data / SQL 原语 | 实测 |
+|---|---|---|---|
+| ① IoT→体素记忆 | 点流体素化 + 增量融合 | `FLOOR(x/e),FLOOR(y/e),FLOOR(z/e)` + `UPDATE…JOIN`（occ 原地累加）| 3000 点 → 300 体素 |
+| ② 漂移检测 | 两个时间点比对「哪些格子变了」 | `CREATE SNAPSHOT` v1/v2 + `DATA BRANCH DIFF` | **UPDATED=300（占据漂移）+ INSERTED=50（新角落）** |
+| ③ 历史版本上的空间查询 | 在某一版本上做 3D kNN | `{snapshot=}` + 算术平方距离 `ORDER BY … LIMIT k` | dock 体素 occ v1=10 / live=14 |
+| ④ 机群地图合并 | 合并第二台机器人的地图，争用格子 | `DATA BRANCH CREATE/DIFF/MERGE WHEN CONFLICT` | FAIL 检出争用、SKIP 保中央权威值+纳入 3 个新走廊体素 |
+| ⑤ 回滚坏批次 | 撤掉一批幽灵障碍 | `RESTORE … FROM SNAPSHOT` | 353→363（幽灵）→ RESTORE 回 353 |
+
+外加 **DuckDB 基线**：同一份体素数据，DuckDB **同样能跑 3D 最近邻查询（分析力对等）**，但**没有任何原生
+版本控制**——"快照"只能 `CREATE TABLE voxel_v1 AS SELECT *`（全量物理拷贝、无 CoW），且无时间旅行
+`{snapshot=}`、无行级 `DATA BRANCH DIFF/MERGE` 冲突策略、无 `RESTORE`、无微秒级 PITR；漂移/合并/回滚全得手搓 SQL + 外部文件管理。
+
+**对比现有机器人记忆方案**：
+
+| 方案 | 强在哪 | 对「带版本的可查 3D 记忆」缺什么 |
+|---|---|---|
+| **rosbag / MCAP** | 录制原始传感器流（append-only log）+ 回放，机器人圈事实标准 | 是日志文件不是可查/可分支的地图——无 3D 查询、无行级 diff/merge、无「按版本时间旅行」 |
+| **OctoMap / TSDF** | 3D 占据数据**结构**的金标准（八叉树、光线投射、概率融合），3D 语义远强于栅格 | 进程内库、无 SQL、无多机 merge-with-conflict、无快照/回滚/PITR 这层数据管理 |
+| **TSDB**（Influx/Timescale）| 时间窗传感器聚合 + 保留策略极强 | 无空间体素合并、无地图版本 branch/diff/merge |
+| **PostGIS / pgRouting** | 真 3D 几何 + 空间索引（比 FLOOR 体素丰富得多） | 版本化靠手搓（表拷贝 / 审计触发器），无内建 CoW 快照、分支、行级 merge-with-conflict、PITR |
+| **向量库** | 嵌入的最近邻检索 | 不是「占据栅格 + 增量融合 + 版本化 diff/merge」 |
+| **MatrixOne** | 把 **SQL 体素融合 + git4data（快照/时间旅行、漂移 DIFF、机群 MERGE 带冲突、RESTORE/PITR）压在同一份数据、同一 ACID 库** | **不是 3D 引擎**：无八叉树/光线投射/真空间索引，体素靠 `FLOOR`+算术距离模拟 |
+
+**结论**：机器人记忆的 git 化是一个 git4data 尚少被提及、却很契合的场景——「**漂移 = 行级 DIFF、机群 = branch+MERGE
+带冲突、传感器抖动 = RESTORE 回滚、复盘 = 时间旅行**」全部成立，且与 3D 空间查询同库。但要清醒：MatrixOne 提供的是
+**数据管理层（版本化 + SQL + 粗体素）**，**不替代** OctoMap/TSDF 的 3D 几何内核——理想形态是**用 MatrixOne 作"机群
+记忆的版本化存储与合并层"，3D 感知/建图仍交给专用库**。

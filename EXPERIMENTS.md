@@ -157,6 +157,11 @@
 - **测试点**：把 prod 库零拷贝 `CLONE` 出 dev 分支并计时；分支上跑 schema 迁移+数据变更；验证 prod 隔离不受影响；`DATA BRANCH DIFF` 行级看变更；`DROP` 丢弃分支。
 - **能力价值**：实测——185ms 即时 CoW 分支（1000+5000 行）、prod 完全隔离、行级 diff 出 +100 行、46ms 丢弃 → **Neon 的 dev/preview 分支工作流在 MatrixOne 上成立，且多了行级 diff/merge**。诚实注脚：改 schema 的表不能行级 diff；`CLONE` 无血缘故 DIFF 认增改不认删（全量含删用 `DATA BRANCH CREATE`）。BaaS 差距见 COMPARISON §18：对标 Neon 差距小（主要差 serverless per-branch endpoint/缩到零），对标 Supabase 差距大（缺 API/Auth/Realtime/Storage/Functions/RLS/SDK 整个应用层；实测 RLS/CDC v3.0.11 无）。
 
+### `exp_robot_memory_3d.py`（`python -m experiments.exp_robot_memory_3d`）— 机器人 3D 空间记忆 + git4data（具身智能）
+- **设计理由**：具身智能/机器人的「记忆」来自 IoT 传感器（LiDAR/深度相机/声呐）的连续 3D 点流，落成的标准结构是**体素地图/占据栅格**（OctoMap/TSDF 那一类）。但机器人记忆不是静态的：世界会**漂移**（家具移动）、多机器人探索不同区域需**合并**地图、传感器抖动会注入**幽灵障碍**需**回滚**、还常要问「上周二机器人认为这里有什么」（时间旅行）——这些都是空间数据上的 git 操作。验证 MatrixOne 能否在一个库里同时担「3D 记忆」与「记忆的版本控制」。
+- **测试点**：5 幕——① IoT 点流 → `FLOOR(x)/FLOOR(y)/FLOOR(z)` 体素化 + `UPDATE…JOIN` **原地增量融合**（occ 累加，故 DIFF 认 UPDATED 而非删+插）；② 世界漂移：`CREATE SNAPSHOT` v1/v2 + `DATA BRANCH DIFF` 行级看出**哪些体素变了**；③ 在**历史版本上**做 3D 最近邻查询（`{snapshot=}` + 算术距离 kNN，时间旅行×空间查询）；④ 机群：`DATA BRANCH CREATE/DIFF/MERGE` 合并第二台机器人的地图，争用体素 `WHEN CONFLICT FAIL/SKIP`；⑤ `RESTORE … FROM SNAPSHOT` 回滚一批幽灵障碍。外加 **DuckDB 基线**对照。
+- **能力价值**：实测——3000 点→300 体素；重访后 DIFF 出 **UPDATED=300（占据漂移）+ INSERTED=50（新发现的角落）**；同一 3D kNN 在 v1 与 live 各自作答（dock 体素 occ 10→14）；机群合并 FAIL 检出争用体素、SKIP 保中央权威值并纳入对方 3 个新走廊体素；幽灵批 353→363 后 RESTORE 回 353。**DuckDB 同样能跑 3D 查询（分析力对等），但没有任何原生版本控制**（"快照"只能 `CREATE TABLE … AS SELECT *` 全量物理拷贝、无 CoW，无时间旅行/行级 DIFF/MERGE 冲突策略/RESTORE/PITR）。诚实边界：MatrixOne **不是 3D 引擎**（无八叉树/光线投射/真空间索引，体素靠 `FLOOR`+算术距离模拟）；它独有的是把 **SQL 体素融合 + git4data（快照/时间旅行、漂移 DIFF、机群 MERGE 带冲突、RESTORE/PITR）压在同一份数据、同一个 ACID 库里**。vs rosbag/MCAP（只录原始流不可查不可合）、OctoMap/TSDF（3D 结构强但无 SQL/无机群合并/无快照管理层）、TSDB（时间聚合强但无空间合并/版本）、PostGIS（真 3D 几何但版本化靠手搓表拷贝/审计触发）、向量库（近邻好但非占据栅格融合+版本）。
+
 ## 一句话总览：MatrixOne git4data 的能力价值落在四处
 
 1. **零成本高频版本**（snapshot/clone/branch/restore 与数据量无关）→ 每次训练/实验都能 pin 一版。
