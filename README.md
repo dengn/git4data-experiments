@@ -150,6 +150,7 @@ python3 -m experiments.exp_stage_datalink     # datalink 编目 OSS 文件；快
 python3 -m experiments.exp_multimodal_catalog # 多模态：datalink + vecf32 近重检测，目录侧版本化（需 OSS）
 python3 -m experiments.exp_bench_curation     # 正面基准：MatrixOne 原地 SQL vs lakeFS+DuckDB（需 OSS+duckdb）
 python3 -m experiments.exp_clickhouse_vs_matrixone  # 对比 ClickHouse 作 trace 后端：摄入/OLAP vs 版本化/可变更/联接（需 chdb）
+python3 -m experiments.exp_neon_branching  # 对标 Neon DB 分支 / 对比 Supabase BaaS（差多少）
 ```
 **会看到**：git4data 在**非结构化字节**上只版本「引用」不版本「字节」；性能基准上 lakeFS+DuckDB
 裸吞吐反而更快——**优势在集成度而非速度**。作 OTel trace 后端时 **ClickHouse 在摄入/OLAP 函数/

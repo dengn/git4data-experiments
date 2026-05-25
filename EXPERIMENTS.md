@@ -152,6 +152,11 @@
 - **测试点**：① durable timer——`timers` 表 + `CREATE TASK` cron 轮询 `UPDATE … FIRED WHERE due_at<=now()`；② durable queue——2 个并发线程 worker 用 `SELECT … FOR UPDATE` claim（`SKIP LOCKED` 不支持→锁上串行）+ `UPDATE` 标 DONE。
 - **能力价值**：实测——到期 timer 被库内调度器**按时 FIRED**、未到期保持 PENDING（`SHOW TASK RUNS` 见 SUCCESS），**无外部 poller**；12 条消息被 2 worker **恰好各处理一次**（各 6 条，DONE=12，EXACTLY-ONCE: True）。⇒ **durable execution 三大原语（持久步骤 exactly-once + durable timer + durable queue）都能在 MatrixOne 原生自建**，是「DBOS-on-MatrixOne」的可用底座。坑：`CREATE TASK` 的 `BEGIN…END` 体内分号在标准 CLI 会被截断，需 DELIMITER 或驱动整条发送。
 
+### `exp_neon_branching.py`（`python -m experiments.exp_neon_branching`）— 对标 Neon 的 DB 分支 / BaaS 对比
+- **设计理由**：Neon 主打即时 CoW 数据库分支（branch-per-PR/CI/dev）+ PITR；Supabase 是 Postgres 之上的完整 BaaS。看 MatrixOne 作"可分支数据库 / BaaS 底座"差多少。
+- **测试点**：把 prod 库零拷贝 `CLONE` 出 dev 分支并计时；分支上跑 schema 迁移+数据变更；验证 prod 隔离不受影响；`DATA BRANCH DIFF` 行级看变更；`DROP` 丢弃分支。
+- **能力价值**：实测——185ms 即时 CoW 分支（1000+5000 行）、prod 完全隔离、行级 diff 出 +100 行、46ms 丢弃 → **Neon 的 dev/preview 分支工作流在 MatrixOne 上成立，且多了行级 diff/merge**。诚实注脚：改 schema 的表不能行级 diff；`CLONE` 无血缘故 DIFF 认增改不认删（全量含删用 `DATA BRANCH CREATE`）。BaaS 差距见 COMPARISON §18：对标 Neon 差距小（主要差 serverless per-branch endpoint/缩到零），对标 Supabase 差距大（缺 API/Auth/Realtime/Storage/Functions/RLS/SDK 整个应用层；实测 RLS/CDC v3.0.11 无）。
+
 ## 一句话总览：MatrixOne git4data 的能力价值落在四处
 
 1. **零成本高频版本**（snapshot/clone/branch/restore 与数据量无关）→ 每次训练/实验都能 pin 一版。
