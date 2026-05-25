@@ -135,6 +135,13 @@
 
 ---
 
+## G. 其它后端场景
+
+### `durable_exec/`（包，`python -m durable_exec.run`）— MatrixOne 作 durable execution engine
+- **设计理由**：设想 MatrixOne 当 Temporal / DBOS 这类 **durable execution** 产品的后端——把工作流当作可崩溃恢复、每步 exactly-once 的持久程序。验证它能否担此角色。
+- **测试点**：DBOS 式引擎——`wf_exec`+`wf_step` 表；**每步的业务副作用与 checkpoint 同一 ACID 事务提交**；同 wf_id 重入时已完成步靠主键跳过（exactly-once）；retry 带 attempts；`recoverable()`=SQL 查 RUNNING；执行日志 SQL 可观测。订单工作流在 charge 后崩溃 → 重入恢复。
+- **能力价值**：实测——崩溃后重入，reserve/charge **skipped**、inventory 仍 9、payments 仍 1、status COMPLETED → **副作用恰好一次**（EXACTLY-ONCE: True）；retry 第 2 次成功、attempts=2。**这是与 trace 监控相反的工作负载**：需要 ACID 事务 + 持久可查状态 + 主键幂等，正是数据库/ MatrixOne 的强项。DBOS 模型 MatrixOne 完全能担；Temporal 的 timers/signals/replay 等需上层引擎。git4data 可对执行日志快照/版本化做可审计回放。
+
 ## 一句话总览：MatrixOne git4data 的能力价值落在四处
 
 1. **零成本高频版本**（snapshot/clone/branch/restore 与数据量无关）→ 每次训练/实验都能 pin 一版。

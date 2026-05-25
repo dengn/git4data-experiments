@@ -298,6 +298,7 @@ config.py        领域常量 + 从 .mo.cnf 读 MatrixOne 连接
 matrixone/       git4data 实现：mo_client / git4data(原语封装) / repo / run_demo
 lakefs_demo/     lakeFS 实现：lk_config / start_lakefs.sh / run_demo
 agent_otel/      真实 agent 接入：tools / llm(可插拔) / agent(OTel 埋点) / exporter(→MatrixOne) / run
+durable_exec/    MatrixOne 作 durable execution engine（DBOS 式）：崩溃恢复 + exactly-once（python -m durable_exec.run）
 experiments/     18 个可独立重跑、自清理的实验脚本（见第 5 节）
 LIMITATIONS.md   MatrixOne 实测缺陷/限制汇总（诚实清单）
 COMPARISON.md    深度报告（§1-12：能力对比/ML场景/性能基准/集成/平台架构/Agent进化）
