@@ -646,3 +646,34 @@ cherry-pick 更细 + 每事务 PITR 时间粒度更细 + HTAP 单存储 online/o
 store，**真正缺的不是版本化，而是上面那层平台能力**（声明式定义、托管物化编排、在线服务 SLA、
 注册表治理、监控）——这正是 Tecton/Hopsworks 的强项。**所以 git4data 版本化是「锦上添花的差异点」，
 不是选型首要标准**。
+
+---
+
+## 14. OpenTelemetry agent trace 接入（`exp_otel_agent_trace.py`，实测）
+
+**背景**：agent/LLM trace 的接入事实标准是 **OpenTelemetry**——GenAI semantic conventions
+定义了 `gen_ai.*` 属性与 span 形态（`invoke_agent` 根 span，子 `chat {model}` LLM 调用、
+`execute_tool {name}` 工具调用），经 OTLP → OTel Collector → 后端（常见落 ClickHouse 这类列存）。
+
+**MatrixOne 能当这个后端吗？——能（实测）**：写一个标准的 `opentelemetry.sdk` `SpanExporter`，
+把每个 `ReadableSpan` 映射成 MatrixOne `spans` 表的一行（trace_id/span_id/parent/name/kind/
+start/end/duration/status + 抽出的 `gen_ai_*` 列 + 完整 `attributes` JSON）。本 PoC 用真实 OTel
+SDK（`TracerProvider` + `SimpleSpanProcessor` + 该 exporter）模拟 16 次 agent 运行：
+
+- **接入**：8 条 agent trace（32 spans）经真实 OTel exporter 落库；
+- **查询（普通 SQL）**：按 parent_span_id 重建 trace 树；按 trace 聚合 token/延迟；
+  `WHERE status='ERROR'` 找出所有失败的 tool/LLM 调用（实测 4 个 error span）；
+- **版本化（git4data）**：快照 = 「某 agent 版本的 trace」；再灌入 agent v2（换 `gpt-4o-mini`）→
+  `DATA BRANCH DIFF v2 vs v1` = INSERTED 32 spans；SQL 做版本 A/B：
+  **v1 gpt-4o 1025 tok/trace、2 个 error trace；v2 gpt-4o-mini 962 tok/trace、1 个**。
+
+**价值与对照**：
+- 生产形态是「agent SDK → OTLP → OTel Collector（带一个 MatrixOne exporter）」，本 PoC 把那个
+  exporter 内联了；映射逻辑一致。
+- 相比 ClickHouse 等**纯 trace 存储**，MatrixOne 多了 **git4data 版本化 + 行级 diff/merge**：
+  同一份 trace 存储**既是可观测性后端、又是可版本化的 agent 迭代基质**——快照固定「这次评测/这版
+  agent 用的 trace」，行级 DIFF 出「v2 比 v1 多/改了哪些 span」，并能在版本化的 trace 上直接 SQL
+  做 cost/error/延迟的跨版本 A/B。这与 §12 的「agent trace + branching 进化」是同一套能力的两面：
+  trace 既可观测、又可版本演化。
+- 边界：MatrixOne 不是 APM/trace UI 产品，没有 Jaeger/Tempo/Grafana 那套可视化与采样/告警生态；
+  它提供的是「**SQL 可查 + git4data 可版本化的 trace 存储后端**」。

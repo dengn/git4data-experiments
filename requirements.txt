@@ -3,3 +3,5 @@ numpy>=1.24
 pymysql>=1.1
 lakefs>=0.16
 boto3>=1.28
+opentelemetry-sdk>=1.30   # 仅 exp_otel_agent_trace 需要
+duckdb>=0.7               # 仅 exp_bench_curation 需要

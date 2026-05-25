@@ -111,12 +111,17 @@
 
 ---
 
-## F. 非 ML
+## F. 非 ML / Agent 基础设施
 
 ### `exp_agent_evolution.py` — Agent trace + branching 进化
 - **设计理由**：验证 git4data 的价值不限于 ML——「agent trace + branching 进化」这种 git 式范式是否成立。
 - **测试点**：branch→从失败 trace 学习→对比→`MERGE` 的进化循环、坏变异 `RESTORE` 回滚、并行探索冲突、`PICK` 技能。
 - **能力价值**：**行级 branch/diff/merge/cherry-pick + 快照/PITR 天然映射「探索-择优-合并-回滚 + 谁学了什么可追溯/可复现/可审计」**——把 agent 自我进化变成可治理的版本控制工作流。
+
+### `exp_otel_agent_trace.py` — OpenTelemetry agent trace 接入 MatrixOne
+- **设计理由**：OTel 是 agent/LLM trace 接入的事实标准（GenAI semantic conventions + OTLP + Collector，后端常落 ClickHouse）。验证 MatrixOne 能否当这个 trace 后端，并叠加 git4data。
+- **测试点**：用**真实 `opentelemetry.sdk` + 自定义 `SpanExporter`** 把 agent 运行的 span 树（`invoke_agent` 根 + `chat {model}`/`execute_tool` 子 span，`gen_ai.request.model`/`gen_ai.usage.*_tokens` 等属性）写入 MatrixOne；SQL 重建 trace 树、聚合 token/延迟、按 `status='ERROR'` 找失败 span；再叠加 git4data：快照=「某 agent 版本的 trace」、`DATA BRANCH DIFF` 比新增 span、SQL 做版本 A/B。
+- **能力价值**：标准 OTel `SpanExporter` 即可把 `gen_ai.*` span 映射进 SQL 表（生产里就是 OTel Collector 的一个 exporter）；trace 树/聚合/错误检索都是普通 SQL；git4data 让**同一存储既是可观测性后端、又是可版本化的 agent 迭代基质**（snapshot per 版本、行级 DIFF、跨版本 cost/error A/B：实测 v1 gpt-4o 1025 tok/2 err vs v2 gpt-4o-mini 962/1）。对照 ClickHouse 式纯 trace 存储，多了「版本化 + 行级 diff/merge」。
 
 ---
 
