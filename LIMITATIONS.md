@@ -33,7 +33,7 @@
 |3.1|🟨 **无 p95/p99 百分位**：只有 `median`(=p50)；`quantile`、`approx_percentile`、`percentile_cont(...) within group` 都不支持|§15.1 实测|时延分位数算不了——可观测/SLA 核心指标缺失；无好规避|
 |3.2|🟨 **无 `uniq`/HLL** 近似基数（有 `approx_count_distinct`）|§15.1 实测|大基数近似去重受限|
 |3.3|🟨 **无时间分桶函数** `date_trunc` / `to_start_of_minute`|§15.1 实测|"指标随时间"曲线要手算桶|
-|3.4|🟨 **无 TTL 子句**（`CREATE TABLE … TTL …` 语法错）|§15.1 实测|无 `TTL` 列子句；但**较新版本有内置 `CREATE TASK` 定时任务**，可定时 `DELETE` 旧数据模拟过期（v3.0.11 实例两者皆无）|
+|3.4|🟨 **无 TTL 子句**（`CREATE TABLE … TTL …` 语法错）|§15.1 实测|无 `TTL` 列子句；但 **v3.0.11 已支持内置 `CREATE TASK` 定时任务**（实测可用），可定时 `DELETE` 旧数据模拟过期。注：`CREATE TASK` 的 `BEGIN…END` 体内含分号，标准 CLI 需切 DELIMITER 或用驱动整条发送，否则会被 `;` 截断误报语法错|
 |3.5|🟨 **无 `CREATE MATERIALIZED VIEW`**（语法错）|§15.1 实测|没有流式增量 rollup|
 |3.6|🟧 **无 `GREATEST`/`LEAST`**|exp_rlhf_preference|用 `CASE WHEN a>b THEN a ELSE b END`|
 |3.7|🟧 **`SUM(布尔)` 报错** `bad value [BOOL]`（如 `SUM(status='ERROR')`）|exp_otel_agent_trace|改 `SUM(CASE WHEN … THEN 1 ELSE 0 END)`|
