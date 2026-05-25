@@ -20,6 +20,8 @@ from .tools import TOOL_SCHEMAS
 def make_llm():
     if os.getenv("ANTHROPIC_API_KEY"):
         return AnthropicLLM()
+    if os.getenv("DEEPSEEK_API_KEY"):
+        return DeepSeekLLM()
     if os.getenv("OPENAI_API_KEY"):
         return OpenAILLM()
     return LocalLLM()
@@ -161,3 +163,15 @@ class OpenAILLM:
             return {"type": "tool_call", "tool": tc.function.name,
                     "args": json.loads(tc.function.arguments)}, usage
         return {"type": "final", "text": m.content or ""}, usage
+
+
+# ------------------- real DeepSeek (OpenAI-compatible API) -------------------
+class DeepSeekLLM(OpenAILLM):
+    system = "deepseek"
+
+    def __init__(self, model="deepseek-chat"):
+        import openai
+        self.client = openai.OpenAI(api_key=os.getenv("DEEPSEEK_API_KEY"),
+                                    base_url="https://api.deepseek.com")
+        self.model = model
+        self.tools = [{"type": "function", "function": t} for t in TOOL_SCHEMAS]

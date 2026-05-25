@@ -193,12 +193,16 @@ v2 gpt-4o-mini 962/1）。⇒ **同一存储既做可观测性后端、又做版
 落 MatrixOne。LLM **可插拔**：设了 `ANTHROPIC_API_KEY`/`OPENAI_API_KEY` 就用真实 Claude/OpenAI
 （tool-use 协议），没有就用确定性本地规划器（无 key 也能跑）。
 ```bash
-python3 -m agent_otel.run                         # 本地规划器（开箱即用）
-ANTHROPIC_API_KEY=sk-... python3 -m agent_otel.run  # 切真实 Claude
+python3 -m agent_otel.run                           # 本地规划器（开箱即用）
+DEEPSEEK_API_KEY=sk-... python3 -m agent_otel.run   # 真实 DeepSeek（OpenAI 兼容）
+ANTHROPIC_API_KEY=sk-... python3 -m agent_otel.run  # 真实 Claude
+OPENAI_API_KEY=sk-... python3 -m agent_otel.run     # 真实 OpenAI
 ```
 **会看到**：agent 真实算出 `47*19=893`、`法国人口×2=134000000`、`Hamlet→Shakespeare`、
-`10% 光速=29979.2`、`Atlantis→工具报错(error span)`；24 个真实 span 入库；再用 SQL 重建 trace
-树、按 trace 聚合 token、统计工具调用频次、定位 error span。
+`10% 光速=29979.2`、`Atlantis→工具报错(error span)`；真实 span 入库；再用 SQL 重建 trace
+树、按 trace 聚合 token、统计工具调用频次、定位 error span。**实测用真实 DeepSeek 跑过**：
+真模型自主决定工具调用、real token 用量入库；甚至能看到模型用了略不对的实体导致 `kb_lookup`
+报错（被记成 OTel error span，SQL 可定位）——正是 trace 后端的价值。
 
 ---
 
